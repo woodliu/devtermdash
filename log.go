@@ -10,7 +10,7 @@ import (
 var zapLogger *zap.SugaredLogger
 
 func init() {
-	createLogger()
+	zapLogger = createLogger()
 }
 
 func createLogger() *zap.SugaredLogger {

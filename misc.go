@@ -1,9 +1,5 @@
 package main
 
-import (
-	"sync"
-)
-
 // Default colors got from Grafana.
 // Check: https://github.com/grafana/grafana/blob/406ef962fc113091bb7229c8f3f0090d63c8392e/packages/grafana-ui/src/utils/colors.ts#L16
 var defColors = []string{
@@ -65,36 +61,9 @@ var defColors = []string{
 	"#DEDAF7",
 }
 
-type syncingFlag struct {
-	syncing bool
-	mu      sync.Mutex
-}
-
-// Set will return true if it has changed the value and false if already
-// was on that state, this way the setter knows if other part of the app has
-// changed in the interval it was calling set.
-func (s *syncingFlag) Set(v bool) bool {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	if s.syncing == v {
-		return false
-	}
-
-	s.syncing = v
-	return true
-}
-
-func (s *syncingFlag) Get() bool {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	return s.syncing
-}
-
 // widgetColorManager manages the color selection for widgets.
 // it knows to get default color, based on series legend...
-// The color selector tracks the number of default colors returned
+// The color selector tracks the number of default colors returned,
 // so it doesn't repeat default colors.
 type widgetColorManager struct {
 	count int
@@ -108,8 +77,8 @@ func (w *widgetColorManager) GetColorFromSeriesLegend() string {
 }
 
 // GetDefaultColor returns a default color, for each returned default color the manager
-// will track how many default colors have been returned so it doesn't repeat until all
-// the default color list has been used and it starts again from the first default color.
+// will track how many default colors have been returned, so it doesn't repeat until all
+// the default color list has been used, and it starts again from the first default color.
 func (w *widgetColorManager) GetDefaultColor() string {
 	color := defColors[w.count]
 	w.count++

@@ -5,11 +5,11 @@ go 1.22.4
 require (
 	github.com/go-kit/log v0.2.1
 	github.com/lucasb-eyer/go-colorful v1.2.0
-	github.com/mum4k/termdash v0.20.0
 	github.com/prometheus/client_golang v1.19.1
 	github.com/prometheus/common v0.54.0
 	github.com/prometheus/prometheus v0.53.0
 	github.com/urfave/cli/v2 v2.27.2
+	github.com/woodliu/termdash v0.0.0-20240628161346-3396b0c114d9
 	go.uber.org/atomic v1.11.0
 	go.uber.org/zap v1.27.0
 )

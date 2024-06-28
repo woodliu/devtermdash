@@ -4,18 +4,19 @@ import (
 	"context"
 	"fmt"
 	"github.com/lucasb-eyer/go-colorful"
-	"github.com/mum4k/termdash"
-	"github.com/mum4k/termdash/cell"
-	"github.com/mum4k/termdash/container"
-	"github.com/mum4k/termdash/container/grid"
-	"github.com/mum4k/termdash/linestyle"
-	"github.com/mum4k/termdash/terminal/tcell"
-	"github.com/mum4k/termdash/terminal/terminalapi"
-	"github.com/mum4k/termdash/widgets/linechart"
-	"github.com/mum4k/termdash/widgets/text"
-	"github.com/mum4k/termdash/widgets/textinput"
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/promql"
+	"github.com/woodliu/termdash"
+	"github.com/woodliu/termdash/cell"
+	"github.com/woodliu/termdash/container"
+	"github.com/woodliu/termdash/container/grid"
+	"github.com/woodliu/termdash/keyboard"
+	"github.com/woodliu/termdash/linestyle"
+	"github.com/woodliu/termdash/terminal/tcell"
+	"github.com/woodliu/termdash/terminal/terminalapi"
+	"github.com/woodliu/termdash/widgets/linechart"
+	"github.com/woodliu/termdash/widgets/text"
+	"github.com/woodliu/termdash/widgets/textinput"
 	"go.uber.org/atomic"
 	"math"
 	"sort"
@@ -24,17 +25,12 @@ import (
 )
 
 const (
-	fullPerc              = 99
-	graphHorizontalPerc   = 80
-	legendHorizontalPerc  = 19
-	paddingHorizontalPerc = 10
-	graphVerticalPerc     = 90
-	legendVerticalPerc    = 4
-	paddingVerticalPerc   = 50
-	legendCharacter       = `⠤⠤`
-	axesColor             = 8
-	yAxisLabelsColor      = 15
-	xAxisLabelsColor      = 248
+	fullPerc            = 99
+	paddingVerticalPerc = 50
+	legendCharacter     = `⠤⠤`
+	axesColor           = 8
+	yAxisLabelsColor    = 15
+	xAxisLabelsColor    = 248
 )
 
 type graph struct {
@@ -61,15 +57,7 @@ func newGraph() (*graph, error) {
 	}
 
 	// Create the Graph widget.
-	lc, err := linechart.New(
-		linechart.AxesCellOpts(cell.FgColor(cell.ColorNumber(axesColor))),
-		linechart.YLabelCellOpts(cell.FgColor(cell.ColorNumber(yAxisLabelsColor))),
-		linechart.XLabelCellOpts(cell.FgColor(cell.ColorNumber(xAxisLabelsColor))),
-		linechart.YAxisAdaptive(),
-		linechart.YAxisFormattedValues(func(value float64) string {
-			return shortFormatter(value, 2)
-		}),
-	)
+	lc, err := newLineChart()
 	if err != nil {
 		return nil, err
 	}
@@ -89,6 +77,18 @@ func newGraph() (*graph, error) {
 	}, nil
 }
 
+func newLineChart() (*linechart.LineChart, error) {
+	return linechart.New(
+		linechart.AxesCellOpts(cell.FgColor(cell.ColorNumber(axesColor))),
+		linechart.YLabelCellOpts(cell.FgColor(cell.ColorNumber(yAxisLabelsColor))),
+		linechart.XLabelCellOpts(cell.FgColor(cell.ColorNumber(xAxisLabelsColor))),
+		linechart.YAxisAdaptive(),
+		linechart.YAxisFormattedValues(func(value float64) string {
+			return shortFormatter(value, 2)
+		}),
+	)
+}
+
 // newTextInput creates a new TextInput field that changes the text on the
 // SegmentDisplay.
 func newTextInput(updateExpr chan<- string, txt *text.Text) (*textinput.TextInput, error) {
@@ -100,7 +100,8 @@ func newTextInput(updateExpr chan<- string, txt *text.Text) (*textinput.TextInpu
 		textinput.PlaceHolderColor(8),
 		textinput.OnSubmit(func(expr string) error {
 			updateExpr <- expr
-			txt.Write(expr, text.WriteReplace())
+			txt.Write(fmt.Sprintf("%s %s  ", legendCharacter, expr), text.WriteReplace())
+
 			return nil
 		}),
 		textinput.ClearOnSubmit(),
@@ -117,39 +118,39 @@ const (
 	graphPointQuantityRetries = 5
 )
 
-func createDashboard(ctx context.Context) error {
-	t, err := tcell.New()
-	if err != nil {
-		return err
-	}
-
+func createDashboard(ctx context.Context, cancel func()) error {
 	gr, err := newGraph()
 	if err != nil {
 		return err
 	}
 
-	builder := grid.New()
-	builder.Add(elementFromGraphAndLegend(gr.widgetExprInput, gr.widgetExprLegend, gr.widgetGraph, gr.widgetGraphLegend))
-	gridOpts, err := builder.Build()
-	if err != nil {
-		return err
-	}
-
-	cont, err := container.New(t, gridOpts...)
-	if err != nil {
-		return err
-	}
-
 	go func() {
-		c, cancel := context.WithCancel(ctx)
+		builder := grid.New()
+		builder.Add(elementFromGraphAndLegend(gr.widgetExprInput, gr.widgetExprLegend, gr.widgetGraph, gr.widgetGraphLegend))
+		gridOpts, err := builder.Build()
+		if err != nil {
+			zapLogger.Panicln(err)
+		}
+
+		t, err := tcell.New(tcell.ColorMode(terminalapi.ColorMode256))
+		if err != nil {
+			zapLogger.Panicln(err)
+		}
+		defer t.Close()
+
+		cont, err := container.New(t, gridOpts...)
+		if err != nil {
+			zapLogger.Panicln(err)
+		}
+
 		quitter := func(k *terminalapi.Keyboard) {
-			if k.Key == 'q' || k.Key == 'Q' {
+			if k.Key == keyboard.KeyEsc || k.Key == keyboard.KeyCtrlC {
 				cancel()
 			}
 		}
 
-		if err := termdash.Run(c, t, cont, termdash.KeyboardSubscriber(quitter), termdash.RedrawInterval(termRedrawInterval)); err != nil {
-			return
+		if err := termdash.Run(ctx, t, cont, termdash.KeyboardSubscriber(quitter), termdash.RedrawInterval(termRedrawInterval)); err != nil {
+			zapLogger.Errorf("error running termdash terminal: %s", err)
 		}
 	}()
 
@@ -159,18 +160,22 @@ func createDashboard(ctx context.Context) error {
 }
 
 func elementFromGraphAndLegend(exprInput *textinput.TextInput, exprTxt *text.Text, graph *linechart.LineChart, legend *text.Text) grid.Element {
-	exprInputElement := grid.Widget(exprInput)
 	exprTxtElement := grid.Widget(exprTxt)
 	graphElement := grid.Widget(graph)
 
 	var elements []grid.Element
-	legendElement := grid.RowHeightPercWithOpts( //TODO:调整高度？
+	legendElement := grid.RowHeightPercWithOpts(
 		fullPerc,
 		[]container.Option{container.PaddingTopPercent(paddingVerticalPerc)},
 		grid.Widget(legend))
 
 	elements = []grid.Element{
-		grid.RowHeightPerc(10, exprInputElement),
+		grid.RowHeightPerc(10,
+			grid.Widget(exprInput,
+				container.Border(linestyle.Light),
+				container.BorderTitle("Press Esc to quit"),
+			),
+		),
 		grid.RowHeightPerc(4, exprTxtElement),
 		grid.RowHeightPerc(80, graphElement),
 		grid.RowHeightPerc(4, legendElement),
@@ -193,11 +198,12 @@ func (g *graph) run(ctx context.Context) {
 		case <-tk.C:
 		case expr := <-g.exprUpdateCh:
 			g.expr.Store(expr)
+			g.widgetGraph.Reset()
 		}
 
 		err := g.sync(ctx)
 		if err != nil {
-			zapLogger.Errorf("graph sync failed,%v", err)
+			g.widgetExprLegend.Write(fmt.Sprintf("error:%s", err.Error()), text.WriteReplace())
 		}
 	}
 }
@@ -498,7 +504,7 @@ func transformMatrix(matrix promql.Matrix) []MetricSeries {
 		// Add the metric to the series.
 		for _, f := range s.Floats {
 			series.Metrics = append(series.Metrics, Metric{
-				TS:    time.Unix(int64(f.T), 0),
+				TS:    time.Unix(0, f.T*int64(time.Millisecond)),
 				Value: f.F,
 			})
 		}
