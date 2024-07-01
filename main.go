@@ -2,10 +2,22 @@ package main
 
 import (
 	"context"
+	"os"
+	"path"
 	"time"
 )
 
 func main() {
+	if resetDb {
+		dir, err := os.ReadDir(storageDir)
+		if err != nil {
+			zapLogger.Panicln(err)
+		}
+		for _, d := range dir {
+			os.RemoveAll(path.Join([]string{storageDir, d.Name()}...))
+		}
+	}
+
 	manager, err := startScrape()
 	if err != nil {
 		zapLogger.Panicln(err)

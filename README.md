@@ -6,7 +6,7 @@ When delvelop some service, you may expose some prometheus metrics,like request 
 ### Why the graph not as expect?
 
 Because in reality, the prometheus will continually scrape and store the target metrics, but when use this tool, you may not continually run it to collect the target metrics, this will cause the metrics lost in some time range.
-So you can delete the `storage_folder`  to delete the history metircs, that you can see the expect graph.
+So you can use `--reset`  to clean the history metircs, that you can see the expect graph.
 
 ### Terminal example
 

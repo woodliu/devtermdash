@@ -10,6 +10,7 @@ import (
 var (
 	storageDir   string
 	exporterAddr string
+	resetDb      bool
 )
 
 func init() {
@@ -20,12 +21,28 @@ func init() {
 				Required:    true,
 				Usage:       "Base path for metrics storage.",
 				Destination: &storageDir,
+				Action: func(context *cli.Context, dir string) error {
+					if _, err := os.Stat(dir); os.IsNotExist(err) {
+						if err := os.Mkdir(dir, 0o755); err != nil {
+							return err
+						}
+						return nil
+					}
+					return nil
+				},
 			},
 			&cli.StringFlag{
 				Name:        "exporter.address",
 				Required:    true,
 				Usage:       "server metrics address. Format: [IP:PORT] or [URL:PORT]",
 				Destination: &exporterAddr,
+			},
+			&cli.BoolFlag{
+				Name:        "reset",
+				Required:    false,
+				Value:       false,
+				Usage:       "reset db",
+				Destination: &resetDb,
 			},
 		},
 	}
